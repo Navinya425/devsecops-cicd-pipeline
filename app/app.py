@@ -3,7 +3,7 @@ import os
 
 app = Flask(__name__)
 
-@app.route('/')
+@app.route('/', methods=['GET'])
 def home():
     return jsonify({
         "message": "DevSecOps Pipeline Running!",
@@ -11,7 +11,7 @@ def home():
         "environment": os.getenv("APP_ENV", "development")
     })
 
-@app.route('/health')
+@app.route('/health', methods=['GET'])
 def health():
     return jsonify({"status": "ok"}), 200
 
