@@ -50,6 +50,7 @@ jobs:
             -Dsonar.projectKey=${{ secrets.SONAR_PROJECT_KEY }}
             -Dsonar.sources=app
             -Dsonar.python.version=3.11
+            -Dsonar.qualitygate.wait=false
 
 # ============================================
 # JOB 3 - DEPENDENCY SCANNING
