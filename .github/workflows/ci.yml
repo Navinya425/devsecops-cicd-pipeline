@@ -16,12 +16,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
 
       - name: Run TruffleHog Secret Scan
-        uses: trufflesecurity/trufflehog@main
+        uses: trufflesecurity/trufflehog@5126fce0d9e7b6f56d1b3e1f22c2e84d7a13b09
         with:
           path: ./
           base: main
@@ -35,12 +33,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
           fetch-depth: 0
 
       - name: SonarCloud Scan
-        uses: SonarSource/sonarcloud-github-action@master
+        uses: SonarSource/sonarcloud-github-action@e44258b109568baa0df60ed515909fc6c72cba92
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
@@ -60,10 +58,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@0b93645e9fea7318ecaed2b359559ac225c90a2b
         with:
           python-version: '3.11'
 
@@ -71,7 +69,7 @@ jobs:
         run: pip install -r app/requirements.txt
 
       - name: Run Snyk Dependency Scan
-        uses: snyk/actions/python@master
+        uses: snyk/actions/python@b98d498629f1c5e001de76a94f30e6e6e0e6d5b
         env:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
         with:
@@ -79,7 +77,7 @@ jobs:
         continue-on-error: true
 
       - name: Upload Snyk Report
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@65c4c4a1ddee5b72f698fdd19549f0f0fb45cf08
         with:
           name: snyk-report
           path: snyk.sarif
@@ -93,13 +91,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
 
       - name: Build Docker image
         run: docker build -t devsecops-app:${{ github.sha }} .
 
       - name: Run Trivy Container Scan
-        uses: aquasecurity/trivy-action@master
+        uses: aquasecurity/trivy-action@6e7b7d1fd3e4fef0c5fa8cce1229c54b2c9bd0d8
         with:
           image-ref: devsecops-app:${{ github.sha }}
           format: table
@@ -107,7 +105,7 @@ jobs:
           severity: CRITICAL,HIGH
 
       - name: Run Trivy and Save Report
-        uses: aquasecurity/trivy-action@master
+        uses: aquasecurity/trivy-action@6e7b7d1fd3e4fef0c5fa8cce1229c54b2c9bd0d8
         with:
           image-ref: devsecops-app:${{ github.sha }}
           format: sarif
@@ -115,7 +113,7 @@ jobs:
           severity: CRITICAL,HIGH
 
       - name: Upload Trivy Report
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@65c4c4a1ddee5b72f698fdd19549f0f0fb45cf08
         with:
           name: trivy-report
           path: trivy-report.sarif
