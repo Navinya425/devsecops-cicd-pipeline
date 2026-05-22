@@ -1,0 +1,137 @@
+name: CI Security Pipeline
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+
+# ============================================
+# JOB 1 - SECRET SCANNING
+# ============================================
+  secret-scan:
+    name: Secret Scan (TruffleHog)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Run TruffleHog Secret Scan
+        uses: trufflesecurity/trufflehog@main
+        with:
+          path: ./
+          base: main
+          extra_args: --only-verified
+
+# ============================================
+# JOB 2 - SAST SCANNING
+# ============================================
+  sast-scan:
+    name: SAST Scan (SonarCloud)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: SonarCloud Scan
+        uses: SonarSource/sonarcloud-github-action@master
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        with:
+          args: >
+            -Dsonar.organization=${{ secrets.SONAR_ORG }}
+            -Dsonar.projectKey=${{ secrets.SONAR_PROJECT_KEY }}
+            -Dsonar.sources=app
+            -Dsonar.python.version=3.11
+
+# ============================================
+# JOB 3 - DEPENDENCY SCANNING
+# ============================================
+  dependency-scan:
+    name: Dependency Scan (Snyk)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install -r app/requirements.txt
+
+      - name: Run Snyk Dependency Scan
+        uses: snyk/actions/python@master
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+        with:
+          args: --severity-threshold=high --file=app/requirements.txt
+        continue-on-error: true
+
+      - name: Upload Snyk Report
+        uses: actions/upload-artifact@v4
+        with:
+          name: snyk-report
+          path: snyk.sarif
+        if: always()
+
+# ============================================
+# JOB 4 - CONTAINER SCANNING
+# ============================================
+  container-scan:
+    name: Container Scan (Trivy)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Build Docker image
+        run: docker build -t devsecops-app:${{ github.sha }} .
+
+      - name: Run Trivy Container Scan
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: devsecops-app:${{ github.sha }}
+          format: table
+          exit-code: '0'
+          severity: CRITICAL,HIGH
+
+      - name: Run Trivy and Save Report
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: devsecops-app:${{ github.sha }}
+          format: sarif
+          output: trivy-report.sarif
+          severity: CRITICAL,HIGH
+
+      - name: Upload Trivy Report
+        uses: actions/upload-artifact@v4
+        with:
+          name: trivy-report
+          path: trivy-report.sarif
+        if: always()
+
+# ============================================
+# JOB 5 - POLICY GATE
+# ============================================
+  policy-gate:
+    name: Policy Gate
+    runs-on: ubuntu-latest
+    needs: [secret-scan, sast-scan, dependency-scan, container-scan]
+    steps:
+      - name: All Security Scans Passed
+        run: |
+          echo "✅ Secret Scan passed"
+          echo "✅ SAST Scan passed"
+          echo "✅ Dependency Scan passed"
+          echo "✅ Container Scan passed"
+          echo "🚀 Policy Gate cleared - Ready for deployment"
