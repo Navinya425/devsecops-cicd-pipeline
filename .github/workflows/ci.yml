@@ -21,7 +21,7 @@ jobs:
           fetch-depth: 0
 
       - name: Run TruffleHog Secret Scan
-        uses: trufflesecurity/trufflehog@main
+        uses: trufflesecurity/trufflehog@v3.88.1
         with:
           path: ./
           base: main
@@ -40,7 +40,7 @@ jobs:
           fetch-depth: 0
 
       - name: SonarCloud Scan
-        uses: SonarSource/sonarcloud-github-action@master
+        uses: SonarSource/sonarcloud-github-action@v3.1.0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
@@ -71,7 +71,7 @@ jobs:
         run: pip install -r app/requirements.txt
 
       - name: Run Snyk Dependency Scan
-        uses: snyk/actions/python@master
+        uses: snyk/actions/python@0.4.0
         env:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
         with:
@@ -99,7 +99,7 @@ jobs:
         run: docker build -t devsecops-app:${{ github.sha }} .
 
       - name: Run Trivy Container Scan
-        uses: aquasecurity/trivy-action@master
+        uses: aquasecurity/trivy-action@0.30.0
         with:
           image-ref: devsecops-app:${{ github.sha }}
           format: table
@@ -107,7 +107,7 @@ jobs:
           severity: CRITICAL,HIGH
 
       - name: Run Trivy and Save Report
-        uses: aquasecurity/trivy-action@master
+        uses: aquasecurity/trivy-action@0.30.0
         with:
           image-ref: devsecops-app:${{ github.sha }}
           format: sarif
