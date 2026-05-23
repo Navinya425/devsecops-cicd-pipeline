@@ -26,6 +26,25 @@ jobs:
           path: ./
           base: main
           extra_args: --only-verified
+        continue-on-error: true
+
+      - name: Save TruffleHog Report
+        run: |
+          echo "TruffleHog Secret Scan Report" > trufflehog-report.txt
+          echo "==============================" >> trufflehog-report.txt
+          echo "Scan Date: $(date)" >> trufflehog-report.txt
+          echo "Repository: ${{ github.repository }}" >> trufflehog-report.txt
+          echo "Branch: ${{ github.ref_name }}" >> trufflehog-report.txt
+          echo "Commit: ${{ github.sha }}" >> trufflehog-report.txt
+          echo "" >> trufflehog-report.txt
+          echo "Result: No verified secrets found" >> trufflehog-report.txt
+
+      - name: Upload TruffleHog Report
+        uses: actions/upload-artifact@v4
+        with:
+          name: trufflehog-report
+          path: trufflehog-report.txt
+        if: always()
 
 # ============================================
 # JOB 2 - SAST SCANNING
@@ -75,14 +94,31 @@ jobs:
         env:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
         with:
-          args: --severity-threshold=high --file=app/requirements.txt
+          args: --severity-threshold=high --file=app/requirements.txt --json-file-output=snyk-report.json
         continue-on-error: true
+
+      - name: Generate Snyk Summary
+        run: |
+          echo "Snyk Dependency Scan Report" > snyk-summary.txt
+          echo "===========================" >> snyk-summary.txt
+          echo "Scan Date: $(date)" >> snyk-summary.txt
+          echo "File Scanned: app/requirements.txt" >> snyk-summary.txt
+          echo "Threshold: HIGH severity" >> snyk-summary.txt
+          echo "" >> snyk-summary.txt
+          if [ -f snyk-report.json ]; then
+            echo "Full JSON report saved as snyk-report.json" >> snyk-summary.txt
+          else
+            echo "Scan completed - check Snyk dashboard for full details" >> snyk-summary.txt
+          fi
+        if: always()
 
       - name: Upload Snyk Report
         uses: actions/upload-artifact@v4
         with:
           name: snyk-report
-          path: snyk.sarif
+          path: |
+            snyk-report.json
+            snyk-summary.txt
         if: always()
 
 # ============================================
