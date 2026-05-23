@@ -18,7 +18,6 @@ jobs:
 
 # ============================================
 # JOB 1 - CHECK CI PASSED
-# Only runs CD if CI pipeline passed
 # ============================================
   check-ci:
     name: Check CI Pipeline Status
@@ -32,15 +31,79 @@ jobs:
           echo "Commit: ${{ github.event.workflow_run.head_sha }}"
 
 # ============================================
-# JOB 2 - BUILD AND PUSH DOCKER IMAGE TO ECR
+# JOB 2 - TERRAFORM FIRST
+# Creates ECR and all AWS infrastructure
+# before we try to push any Docker image
+# ============================================
+  terraform:
+    name: Terraform Apply
+    runs-on: ubuntu-latest
+    needs: check-ci
+    outputs:
+      ecr-registry: ${{ steps.get-ecr.outputs.registry }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.6.0
+          terraform_wrapper: false
+
+      - name: Terraform Init
+        working-directory: terraform
+        run: terraform init
+
+      - name: Terraform Validate
+        working-directory: terraform
+        run: terraform validate
+
+      - name: Terraform Plan
+        working-directory: terraform
+        run: |
+          terraform plan \
+            -out=tfplan \
+            -var="aws_region=${{ env.AWS_REGION }}"
+
+      - name: Terraform Apply
+        working-directory: terraform
+        run: |
+          terraform apply \
+            -auto-approve \
+            tfplan
+          echo "✅ Infrastructure created successfully"
+
+      - name: Get ECR Registry URL
+        id: get-ecr
+        working-directory: terraform
+        run: |
+          ECR_URL=$(terraform output -raw ecr_repository_url)
+          echo "ECR URL: $ECR_URL"
+          REGISTRY=$(echo $ECR_URL | cut -d'/' -f1)
+          echo "registry=$REGISTRY" >> $GITHUB_OUTPUT
+          echo "Registry: $REGISTRY"
+
+# ============================================
+# JOB 3 - BUILD AND PUSH DOCKER IMAGE
+# Runs after Terraform so ECR exists
 # ============================================
   build-and-push:
     name: Build and Push Docker Image
     runs-on: ubuntu-latest
-    needs: check-ci
+    needs: terraform
     outputs:
       image-tag: ${{ steps.set-tag.outputs.tag }}
-      ecr-registry: ${{ steps.login-ecr.outputs.registry }}
 
     steps:
       - name: Checkout code
@@ -82,74 +145,12 @@ jobs:
           echo "📦 Image: ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ steps.set-tag.outputs.tag }}"
 
 # ============================================
-# JOB 3 - TERRAFORM INFRASTRUCTURE
-# Creates all AWS resources if not existing
-# ============================================
-  terraform:
-    name: Terraform Apply
-    runs-on: ubuntu-latest
-    needs: build-and-push
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-        with:
-          ref: ${{ github.event.workflow_run.head_sha }}
-
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ env.AWS_REGION }}
-
-      - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v3
-        with:
-          terraform_version: 1.6.0
-
-      - name: Terraform Init
-        working-directory: terraform
-        run: terraform init
-
-      - name: Terraform Format Check
-        working-directory: terraform
-        run: terraform fmt -check
-        continue-on-error: true
-
-      - name: Terraform Validate
-        working-directory: terraform
-        run: terraform validate
-
-      - name: Terraform Plan
-        working-directory: terraform
-        run: |
-          terraform plan \
-            -out=tfplan \
-            -var="aws_region=${{ env.AWS_REGION }}"
-
-      - name: Terraform Apply
-        working-directory: terraform
-        run: |
-          terraform apply \
-            -auto-approve \
-            tfplan
-          echo "✅ Infrastructure created successfully"
-
-      - name: Get Terraform Outputs
-        working-directory: terraform
-        run: |
-          echo "ECR URL: $(terraform output -raw ecr_repository_url)"
-          echo "ECS Cluster: $(terraform output -raw ecs_cluster_name)"
-          echo "ECS Service: $(terraform output -raw ecs_service_name)"
-
-# ============================================
 # JOB 4 - DEPLOY TO DEV
 # ============================================
   deploy-dev:
     name: Deploy to DEV
     runs-on: ubuntu-latest
-    needs: [build-and-push, terraform]
+    needs: build-and-push
     environment: dev
 
     steps:
@@ -159,10 +160,6 @@ jobs:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_REGION }}
-
-      - name: Login to Amazon ECR
-        id: login-ecr
-        uses: aws-actions/amazon-ecr-login@v2
 
       - name: Deploy to DEV ECS
         run: |
@@ -192,22 +189,16 @@ jobs:
             --query "Reservations[0].Instances[0].PublicIpAddress" \
             --output text \
             --region ${{ env.AWS_REGION }})
-
           echo "DEV IP: $EC2_IP"
-
           sleep 30
-
           HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
             --max-time 30 \
             http://$EC2_IP:5000/health || echo "000")
-
           echo "Health check status: $HTTP_STATUS"
-
           if [ "$HTTP_STATUS" = "200" ]; then
             echo "✅ Smoke test passed - app is healthy"
           else
-            echo "⚠️ Smoke test returned status $HTTP_STATUS"
-            echo "App may still be starting up - continuing pipeline"
+            echo "⚠️ Smoke test returned status $HTTP_STATUS - app may still be starting"
           fi
 
 # ============================================
@@ -255,27 +246,20 @@ jobs:
             --query "Reservations[0].Instances[0].PublicIpAddress" \
             --output text \
             --region ${{ env.AWS_REGION }})
-
           echo "STAGING IP: $EC2_IP"
-
           sleep 30
-
           HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
             --max-time 30 \
             http://$EC2_IP:5000/health || echo "000")
-
           echo "Health check status: $HTTP_STATUS"
-
           if [ "$HTTP_STATUS" = "200" ]; then
             echo "✅ Smoke test passed - app is healthy"
           else
-            echo "⚠️ Smoke test returned status $HTTP_STATUS"
-            echo "App may still be starting up - continuing pipeline"
+            echo "⚠️ Smoke test returned status $HTTP_STATUS - app may still be starting"
           fi
 
 # ============================================
 # JOB 6 - MANUAL APPROVAL GATE
-# A human must approve before PROD deploy
 # ============================================
   approval-gate:
     name: Manual Approval for PROD
@@ -293,7 +277,6 @@ jobs:
 
 # ============================================
 # JOB 7 - DEPLOY TO PROD
-# Only runs after manual approval
 # ============================================
   deploy-prod:
     name: Deploy to PROD
@@ -347,17 +330,12 @@ jobs:
             --query "Reservations[0].Instances[0].PublicIpAddress" \
             --output text \
             --region ${{ env.AWS_REGION }})
-
           echo "PROD IP: $EC2_IP"
-
           sleep 30
-
           HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
             --max-time 30 \
             http://$EC2_IP:5000/health || echo "000")
-
           echo "Health check status: $HTTP_STATUS"
-
           if [ "$HTTP_STATUS" = "200" ]; then
             echo "✅ PROD smoke test passed"
             echo "🎉 Deployment complete - app is live!"
@@ -375,5 +353,4 @@ jobs:
           echo "Region: ${{ env.AWS_REGION }}"
           echo "Cluster: ${{ env.ECS_CLUSTER }}"
           echo "Service: ${{ env.ECS_SERVICE }}"
-          echo "Image Tag: ${{ needs.build-and-push.outputs.image-tag }}"
           echo "================================================"
