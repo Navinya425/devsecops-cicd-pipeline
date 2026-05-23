@@ -48,12 +48,10 @@ jobs:
           kubectl cluster-info --context kind-devsecops
           echo "✅ Kubernetes cluster ready"
 
-      - name: Save kubeconfig
+      - name: Verify cluster
         run: |
-          mkdir -p $HOME/.kube
-          kind get kubeconfig --name devsecops > $HOME/.kube/config
           kubectl get nodes
-          echo "✅ Kubeconfig saved"
+          echo "✅ Cluster verified"
 
 # ============================================
 # JOB 3 - START VAULT & STORE SECRETS
@@ -70,8 +68,12 @@ jobs:
 
       - name: Install Vault
         run: |
-          wget -O- https://apt.releases.hashicorp.com/gpg | sudo gpg --dearmor -o /usr/share/keyrings/hashicorp-archive-keyring.gpg
-          echo "deb [signed-by=/usr/share/keyrings/hashicorp-archive-keyring.gpg] https://apt.releases.hashicorp.com $(lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/hashicorp.list
+          wget -O- https://apt.releases.hashicorp.com/gpg | \
+            sudo gpg --dearmor -o \
+            /usr/share/keyrings/hashicorp-archive-keyring.gpg
+          echo "deb [signed-by=/usr/share/keyrings/hashicorp-archive-keyring.gpg] \
+            https://apt.releases.hashicorp.com $(lsb_release -cs) main" | \
+            sudo tee /etc/apt/sources.list.d/hashicorp.list
           sudo apt update && sudo apt install vault -y
           vault version
           echo "✅ Vault installed"
@@ -83,8 +85,9 @@ jobs:
             -dev-listen-address="0.0.0.0:8200" &
           echo "⏳ Waiting for Vault to be ready..."
           for i in {1..30}; do
-            if curl -s http://127.0.0.1:8200/v1/sys/health > /dev/null 2>&1; then
-              echo "✅ Vault is ready after $i attempts"
+            if curl -s http://127.0.0.1:8200/v1/sys/health \
+              > /dev/null 2>&1; then
+              echo "✅ Vault ready after $i attempts"
               break
             fi
             echo "Attempt $i - waiting..."
@@ -132,6 +135,7 @@ jobs:
       - name: Create kind cluster
         run: |
           kind create cluster --name devsecops --wait 60s
+          mkdir -p $HOME/.kube
           kind get kubeconfig --name devsecops > $HOME/.kube/config
           echo "✅ Cluster ready for Terraform"
 
@@ -213,6 +217,7 @@ jobs:
           chmod +x ./kind
           sudo mv ./kind /usr/local/bin/kind
           kind create cluster --name devsecops --wait 60s
+          mkdir -p $HOME/.kube
           kind get kubeconfig --name devsecops > $HOME/.kube/config
 
       - name: Download Docker image
@@ -228,7 +233,8 @@ jobs:
 
       - name: Create dev namespace
         run: |
-          kubectl create namespace dev --dry-run=client -o yaml | kubectl apply -f -
+          kubectl create namespace dev \
+            --dry-run=client -o yaml | kubectl apply -f -
 
       - name: Apply Kubernetes secret to DEV
         run: |
@@ -287,6 +293,7 @@ jobs:
           chmod +x ./kind
           sudo mv ./kind /usr/local/bin/kind
           kind create cluster --name devsecops --wait 60s
+          mkdir -p $HOME/.kube
           kind get kubeconfig --name devsecops > $HOME/.kube/config
 
       - name: Download Docker image
@@ -376,6 +383,7 @@ jobs:
           chmod +x ./kind
           sudo mv ./kind /usr/local/bin/kind
           kind create cluster --name devsecops --wait 60s
+          mkdir -p $HOME/.kube
           kind get kubeconfig --name devsecops > $HOME/.kube/config
 
       - name: Download Docker image
@@ -391,11 +399,15 @@ jobs:
 
       - name: Install Vault
         run: |
-          wget -O- https://apt.releases.hashicorp.com/gpg | sudo gpg --dearmor -o /usr/share/keyrings/hashicorp-archive-keyring.gpg
-          echo "deb [signed-by=/usr/share/keyrings/hashicorp-archive-keyring.gpg] https://apt.releases.hashicorp.com $(lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/hashicorp.list
+          wget -O- https://apt.releases.hashicorp.com/gpg | \
+            sudo gpg --dearmor -o \
+            /usr/share/keyrings/hashicorp-archive-keyring.gpg
+          echo "deb [signed-by=/usr/share/keyrings/hashicorp-archive-keyring.gpg] \
+            https://apt.releases.hashicorp.com $(lsb_release -cs) main" | \
+            sudo tee /etc/apt/sources.list.d/hashicorp.list
           sudo apt update && sudo apt install vault -y
 
-      - name: Start Vault and fetch secrets
+      - name: Start Vault and fetch secrets for PROD
         run: |
           vault server -dev \
             -dev-root-token-id="root-token" \
@@ -415,7 +427,6 @@ jobs:
           vault kv put secret/devsecops-app \
             app-env="production" \
             app-key="devsecops-super-secret-key-2024"
-          echo "✅ Secrets stored in Vault"
           APP_ENV=$(vault kv get \
             -field=app-env secret/devsecops-app)
           APP_KEY=$(vault kv get \
@@ -459,8 +470,11 @@ jobs:
 
       - name: Save deployment logs
         run: |
-          kubectl get all -n dev > deployment-logs.txt
+          echo "===== DEV =====" > deployment-logs.txt
+          kubectl get all -n dev >> deployment-logs.txt
+          echo "===== STAGING =====" >> deployment-logs.txt
           kubectl get all -n staging >> deployment-logs.txt
+          echo "===== PROD =====" >> deployment-logs.txt
           kubectl get all -n prod >> deployment-logs.txt
           echo "✅ All deployment logs saved"
 

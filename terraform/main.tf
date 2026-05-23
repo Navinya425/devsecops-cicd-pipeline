@@ -3,7 +3,7 @@ terraform {
   required_providers {
     kubernetes = {
       source  = "hashicorp/kubernetes"
-      version = "= 2.23.0"
+      version = "= 2.20.0"
     }
   }
 }
@@ -128,8 +128,8 @@ resource "kubernetes_deployment" "dev" {
       }
       spec {
         container {
-          name  = var.app_name
-          image = var.app_image
+          name              = var.app_name
+          image             = var.app_image
           image_pull_policy = "IfNotPresent"
           port {
             container_port = var.app_port
@@ -231,8 +231,8 @@ resource "kubernetes_deployment" "staging" {
       }
       spec {
         container {
-          name  = var.app_name
-          image = var.app_image
+          name              = var.app_name
+          image             = var.app_image
           image_pull_policy = "IfNotPresent"
           port {
             container_port = var.app_port
@@ -334,8 +334,8 @@ resource "kubernetes_deployment" "prod" {
       }
       spec {
         container {
-          name  = var.app_name
-          image = var.app_image
+          name              = var.app_name
+          image             = var.app_image
           image_pull_policy = "IfNotPresent"
           port {
             container_port = var.app_port
