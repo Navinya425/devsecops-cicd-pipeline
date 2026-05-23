@@ -3,7 +3,7 @@ terraform {
   required_providers {
     aws = {
       source  = "hashicorp/aws"
-      version = "~> 5.0"
+      version = "= 5.82.2"
     }
   }
   backend "s3" {
@@ -277,9 +277,9 @@ resource "aws_ecs_cluster" "main" {
 # ECS TASK DEFINITION — how to run your container
 # ============================================
 resource "aws_ecs_task_definition" "app" {
-  family                = var.app_name
-  network_mode          = "bridge"
-  execution_role_arn    = aws_iam_role.ecs_task_execution_role.arn
+  family             = var.app_name
+  network_mode       = "bridge"
+  execution_role_arn = aws_iam_role.ecs_task_execution_role.arn
 
   container_definitions = jsonencode([{
     name      = var.app_name
