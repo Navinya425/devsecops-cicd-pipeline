@@ -1,0 +1,17 @@
+directory:
+  - terraform
+
+output:
+  - cli
+  - json
+
+soft-fail: true
+
+skip-check:
+  - CKV_AWS_79   # IMDSv2 not required for this project
+  - CKV_AWS_8    # Launch template detailed monitoring optional
+  - CKV_AWS_341  # Launch template hop limit optional
+
+compact: true
+
+download-external-modules: false

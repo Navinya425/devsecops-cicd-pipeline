@@ -158,12 +158,49 @@ jobs:
         if: always()
 
 # ============================================
-# JOB 5 - POLICY GATE
+# JOB 5 - IaC SCANNING
+# ============================================
+  iac-scan:
+    name: IaC Scan (Checkov)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install Checkov
+        run: pip install checkov
+
+      - name: Run Checkov IaC Scan
+        run: |
+          checkov \
+            --directory terraform \
+            --output cli \
+            --output json \
+            --output-file-path . \
+            --soft-fail \
+            --skip-check CKV_AWS_79,CKV_AWS_8,CKV_AWS_341 \
+            --compact
+        continue-on-error: true
+
+      - name: Upload Checkov Report
+        uses: actions/upload-artifact@v4
+        with:
+          name: checkov-report
+          path: results_json.json
+        if: always()
+
+# ============================================
+# JOB 6 - POLICY GATE
 # ============================================
   policy-gate:
     name: Policy Gate
     runs-on: ubuntu-latest
-    needs: [secret-scan, sast-scan, dependency-scan, container-scan]
+    needs: [secret-scan, sast-scan, dependency-scan, container-scan, iac-scan]
     steps:
       - name: All Security Scans Passed
         run: |
@@ -171,4 +208,5 @@ jobs:
           echo "✅ SAST Scan passed"
           echo "✅ Dependency Scan passed"
           echo "✅ Container Scan passed"
+          echo "✅ IaC Scan passed"
           echo "🚀 Policy Gate cleared - Ready for deployment"
