@@ -1,0 +1,35 @@
+name: IaC Security Scan
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+
+  checkov-scan:
+
+    runs-on: ubuntu-latest
+
+    steps:
+
+    # Checkout Repository
+    - name: Checkout Code
+      uses: actions/checkout@v4
+
+    # Run Checkov Scan
+    - name: Run Checkov Scan
+      uses: bridgecrewio/checkov-action@master
+      with:
+        directory: .
+        framework: terraform
+        output_format: cli,sarif
+        output_file_path: console,results.sarif
+
+    # Upload Scan Report
+    - name: Upload Checkov Report
+      uses: actions/upload-artifact@v4
+      with:
+        name: checkov-report
+        path: results.sarif
+        
