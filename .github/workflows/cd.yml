@@ -78,9 +78,18 @@ jobs:
 
       - name: Start Vault in dev mode
         run: |
-          vault server -dev -dev-root-token-id="root-token" -config=vault/vault-config.hcl &
-          sleep 5
-          echo "✅ Vault server started"
+          vault server -dev \
+            -dev-root-token-id="root-token" \
+            -dev-listen-address="0.0.0.0:8200" &
+          echo "⏳ Waiting for Vault to be ready..."
+          for i in {1..30}; do
+            if curl -s http://127.0.0.1:8200/v1/sys/health > /dev/null 2>&1; then
+              echo "✅ Vault is ready after $i attempts"
+              break
+            fi
+            echo "Attempt $i - waiting..."
+            sleep 2
+          done
 
       - name: Store secrets in Vault
         env:
@@ -120,7 +129,7 @@ jobs:
           chmod +x ./kind
           sudo mv ./kind /usr/local/bin/kind
 
-      - name: Recreate kind cluster
+      - name: Create kind cluster
         run: |
           kind create cluster --name devsecops --wait 60s
           kind get kubeconfig --name devsecops > $HOME/.kube/config
@@ -198,7 +207,7 @@ jobs:
         with:
           ref: ${{ github.event.workflow_run.head_sha }}
 
-      - name: Install kind and restore cluster
+      - name: Install kind and create cluster
         run: |
           curl -Lo ./kind https://kind.sigs.k8s.io/dl/v0.20.0/kind-linux-amd64
           chmod +x ./kind
@@ -234,7 +243,8 @@ jobs:
 
       - name: Wait for DEV deployment
         run: |
-          kubectl rollout status deployment/devsecops-app -n dev --timeout=120s
+          kubectl rollout status deployment/devsecops-app \
+            -n dev --timeout=120s
           echo "✅ DEV deployment stable"
 
       - name: Smoke test DEV
@@ -242,9 +252,12 @@ jobs:
           echo "🧪 Running DEV smoke test..."
           kubectl get pods -n dev
           kubectl get services -n dev
-          POD=$(kubectl get pod -n dev -l app=devsecops-app -o jsonpath="{.items[0].metadata.name}")
+          POD=$(kubectl get pod -n dev \
+            -l app=devsecops-app \
+            -o jsonpath="{.items[0].metadata.name}")
           echo "Testing pod: $POD"
-          kubectl exec $POD -n dev -- curl -s http://localhost:5000/health
+          kubectl exec $POD -n dev -- \
+            curl -s http://localhost:5000/health
           echo "✅ DEV smoke test passed"
 
       - name: DEV deployment summary
@@ -268,7 +281,7 @@ jobs:
         with:
           ref: ${{ github.event.workflow_run.head_sha }}
 
-      - name: Install kind and restore cluster
+      - name: Install kind and create cluster
         run: |
           curl -Lo ./kind https://kind.sigs.k8s.io/dl/v0.20.0/kind-linux-amd64
           chmod +x ./kind
@@ -289,7 +302,8 @@ jobs:
 
       - name: Create staging namespace
         run: |
-          kubectl create namespace staging --dry-run=client -o yaml | kubectl apply -f -
+          kubectl create namespace staging \
+            --dry-run=client -o yaml | kubectl apply -f -
 
       - name: Apply Kubernetes secret to STAGING
         run: |
@@ -304,16 +318,20 @@ jobs:
 
       - name: Wait for STAGING deployment
         run: |
-          kubectl rollout status deployment/devsecops-app -n staging --timeout=120s
+          kubectl rollout status deployment/devsecops-app \
+            -n staging --timeout=120s
           echo "✅ STAGING deployment stable"
 
       - name: Smoke test STAGING
         run: |
           echo "🧪 Running STAGING smoke test..."
           kubectl get pods -n staging
-          POD=$(kubectl get pod -n staging -l app=devsecops-app -o jsonpath="{.items[0].metadata.name}")
+          POD=$(kubectl get pod -n staging \
+            -l app=devsecops-app \
+            -o jsonpath="{.items[0].metadata.name}")
           echo "Testing pod: $POD"
-          kubectl exec $POD -n staging -- curl -s http://localhost:5000/health
+          kubectl exec $POD -n staging -- \
+            curl -s http://localhost:5000/health
           echo "✅ STAGING smoke test passed"
 
       - name: STAGING deployment summary
@@ -352,7 +370,7 @@ jobs:
         with:
           ref: ${{ github.event.workflow_run.head_sha }}
 
-      - name: Install kind and restore cluster
+      - name: Install kind and create cluster
         run: |
           curl -Lo ./kind https://kind.sigs.k8s.io/dl/v0.20.0/kind-linux-amd64
           chmod +x ./kind
@@ -371,10 +389,6 @@ jobs:
           kind load docker-image devsecops-app:latest --name devsecops
           echo "✅ Image loaded into cluster"
 
-      - name: Create prod namespace
-        run: |
-          kubectl create namespace prod --dry-run=client -o yaml | kubectl apply -f -
-
       - name: Install Vault
         run: |
           wget -O- https://apt.releases.hashicorp.com/gpg | sudo gpg --dearmor -o /usr/share/keyrings/hashicorp-archive-keyring.gpg
@@ -383,18 +397,36 @@ jobs:
 
       - name: Start Vault and fetch secrets
         run: |
-          vault server -dev -dev-root-token-id="root-token" -config=vault/vault-config.hcl &
-          sleep 5
+          vault server -dev \
+            -dev-root-token-id="root-token" \
+            -dev-listen-address="0.0.0.0:8200" &
+          echo "⏳ Waiting for Vault to be ready..."
+          for i in {1..30}; do
+            if curl -s http://127.0.0.1:8200/v1/sys/health \
+              > /dev/null 2>&1; then
+              echo "✅ Vault ready after $i attempts"
+              break
+            fi
+            echo "Attempt $i - waiting..."
+            sleep 2
+          done
           export VAULT_ADDR=http://127.0.0.1:8200
           export VAULT_TOKEN=root-token
           vault kv put secret/devsecops-app \
             app-env="production" \
             app-key="devsecops-super-secret-key-2024"
           echo "✅ Secrets stored in Vault"
-          APP_ENV=$(vault kv get -field=app-env secret/devsecops-app)
-          APP_KEY=$(vault kv get -field=app-key secret/devsecops-app)
+          APP_ENV=$(vault kv get \
+            -field=app-env secret/devsecops-app)
+          APP_KEY=$(vault kv get \
+            -field=app-key secret/devsecops-app)
           echo "✅ Secrets fetched from Vault successfully"
           echo "APP_ENV: $APP_ENV"
+
+      - name: Create prod namespace
+        run: |
+          kubectl create namespace prod \
+            --dry-run=client -o yaml | kubectl apply -f -
 
       - name: Apply Kubernetes secret to PROD
         run: |
@@ -409,30 +441,34 @@ jobs:
 
       - name: Wait for PROD deployment
         run: |
-          kubectl rollout status deployment/devsecops-app -n prod --timeout=120s
+          kubectl rollout status deployment/devsecops-app \
+            -n prod --timeout=120s
           echo "✅ PROD deployment stable"
 
       - name: Final smoke test PROD
         run: |
           echo "🧪 Running PROD smoke test..."
           kubectl get pods -n prod
-          POD=$(kubectl get pod -n prod -l app=devsecops-app -o jsonpath="{.items[0].metadata.name}")
+          POD=$(kubectl get pod -n prod \
+            -l app=devsecops-app \
+            -o jsonpath="{.items[0].metadata.name}")
           echo "Testing pod: $POD"
-          kubectl exec $POD -n prod -- curl -s http://localhost:5000/health
+          kubectl exec $POD -n prod -- \
+            curl -s http://localhost:5000/health
           echo "✅ PROD smoke test passed"
 
       - name: Save deployment logs
         run: |
-          kubectl get all -n prod > prod-deployment-log.txt
-          kubectl get all -n staging >> prod-deployment-log.txt
-          kubectl get all -n dev >> prod-deployment-log.txt
-          echo "✅ Deployment logs saved"
+          kubectl get all -n dev > deployment-logs.txt
+          kubectl get all -n staging >> deployment-logs.txt
+          kubectl get all -n prod >> deployment-logs.txt
+          echo "✅ All deployment logs saved"
 
       - name: Upload deployment logs
         uses: actions/upload-artifact@v4
         with:
           name: deployment-logs
-          path: prod-deployment-log.txt
+          path: deployment-logs.txt
         if: always()
 
       - name: Final deployment summary
