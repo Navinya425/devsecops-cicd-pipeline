@@ -1,16 +1,14 @@
 name: CD Pipeline
 
 on:
-  workflow_run:
-    workflows: ["CI Security Pipeline"]
-    types:
-      - completed
+  push:
+    branches:
+      - main
+      - automated-cd-deployment
 
 jobs:
 
   docker-build-push:
-
-    if: ${{ github.event.workflow_run.conclusion == 'success' }}
 
     runs-on: ubuntu-latest
 
