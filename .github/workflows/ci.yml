@@ -1,10 +1,14 @@
 name: CI Security Pipeline
-
 on:
   push:
-    branches: [ "main" ]
+    branches:
+      - main
+      - automated-cd-deployment
+
   pull_request:
-    branches: [ "main" ]
+    branches:
+      - main
+      - automated-cd-deployment
 
 jobs:
 
