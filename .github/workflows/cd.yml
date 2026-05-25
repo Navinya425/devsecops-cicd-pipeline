@@ -2,7 +2,7 @@ name: CD Pipeline
 
 on:
   workflow_run:
-    workflows: ["CI Pipeline"]
+    workflows: ["CI Security Pipeline"]
     types:
       - completed
 
@@ -47,11 +47,11 @@ jobs:
       - name: Pull Latest Docker Image
         run: docker pull navinya425/devsecops-app:latest
 
-      - name: Stop and Remove Old DEV Container
+      - name: Remove Old DEV Container
         shell: powershell
+        continue-on-error: true
         run: |
           docker rm -f dev-app
-        continue-on-error: true
 
       - name: Deploy DEV Container
         shell: powershell
@@ -74,11 +74,11 @@ jobs:
       - name: Pull Latest Docker Image
         run: docker pull navinya425/devsecops-app:latest
 
-      - name: Stop and Remove Old STAGING Container
+      - name: Remove Old STAGING Container
         shell: powershell
+        continue-on-error: true
         run: |
           docker rm -f staging-app
-        continue-on-error: true
 
       - name: Deploy STAGING Container
         shell: powershell
@@ -101,11 +101,11 @@ jobs:
       - name: Pull Latest Docker Image
         run: docker pull navinya425/devsecops-app:latest
 
-      - name: Stop and Remove Old PROD Container
+      - name: Remove Old PROD Container
         shell: powershell
+        continue-on-error: true
         run: |
           docker rm -f prod-app
-        continue-on-error: true
 
       - name: Deploy PROD Container
         shell: powershell
