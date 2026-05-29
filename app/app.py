@@ -6,7 +6,7 @@ app = Flask(__name__)
 @app.route('/', methods=['GET'])
 def home():
     return jsonify({
-        "message": "Secure DevSecOps Pipeline Running!!",
+        "message": "Secure DevSecOps Pipeline Running!",
         "status": "healthy",
         "environment": os.getenv("APP_ENV", "development")
     })
